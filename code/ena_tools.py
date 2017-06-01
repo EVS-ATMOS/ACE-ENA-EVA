@@ -1,5 +1,6 @@
 import urllib3
-
+from matplotlib import use
+use('agg')
 #fetch GFS data and plot at ENA
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
