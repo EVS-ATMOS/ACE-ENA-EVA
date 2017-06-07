@@ -176,6 +176,11 @@ def save_latest_gfs_grw_ttd():
     data = open(fn, 'rb')
     s3.Bucket('aceena').put_object(Key=s3_key, Body=data, ACL='public-read')
     data.close()
+    data2 = open(fn, 'rb')
+    s3.Bucket('aceena').put_object(Key='latest_T_ts_timeseries_GFS_GRW.png',
+            Body=data2, ACL='public-read')
+    data2.close()
+
 
 
 
