@@ -126,6 +126,8 @@ def save_latest_minnis_png_s3():
     s3 = boto3.resource('s3')
     data = open(fn, 'rb')
     s3.Bucket('aceena').put_object(Key=s3_key, Body=data, ACL='public-read')
+    s3.Bucket('aceena').put_object(Key='latest_minnis_ir.png', Body=data, ACL='public-read')
+    data.close()
     return s3_key, fn
 
 def give_me_latest_gfs():
