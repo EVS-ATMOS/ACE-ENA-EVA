@@ -16,9 +16,11 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import tempfile
 import boto3
+from siphon.catalog import get_latest_access_url
 
-def gen_s3_key(fig_datetime, pref):
-    fmt_str = '%Y/%m/%d/' + pref + '%Y%m%d_%H%M.png'
+
+def gen_s3_key(fig_datetime, pref, sfx=''):
+    fmt_str = '%Y/%m/%d/' + pref + '%Y%m%d_%H%M' + sfx + '.png'
     o_str = datetime.strftime(fig_datetime, fmt_str)
     return o_str
 
@@ -120,9 +122,58 @@ def save_latest_minnis_png_s3():
     fn = local_fig.name
     fig_datetime = ir_plot(my_data, fn)
     my_data.close()
-    s3_key = gen_s3_key(fig_datetime, 'minnis_ir_')
+    s3_key = 'minnis_ir/' + gen_s3_key(fig_datetime, 'minnis_ir_')
     s3 = boto3.resource('s3')
     data = open(fn, 'rb')
     s3.Bucket('aceena').put_object(Key=s3_key, Body=data, ACL='public-read')
     return s3_key, fn
+
+def give_me_latest_gfs():
+    best_gfs = 'http://thredds.ucar.edu/thredds/catalog/grib/NCEP/GFS/Global_0p5deg/catalog.xml'
+    latest_gfs = get_latest_access_url(best_gfs, "NetcdfSubset")
+    ncss = NCSS(latest_gfs)
+    return ncss
+
+def get_me_grw_ts(ncss, varss):
+    query = ncss.query()
+    now = datetime.utcnow()
+    gra_lat = 39.0525
+    gra_lon = -28.0069
+    query.lonlat_point(gra_lon, gra_lat).vertical_level(0).all_times()
+    query.variables(*varss).accept('netcdf')
+    data = ncss.get_data(query)
+    return data
+
+
+def plot_ttd_gra(my_ts, ofile):
+    temp = my_ts.variables['Temperature_height_above_ground']
+    dp = my_ts.variables['Dewpoint_temperature_height_above_ground']
+    time = my_ts.variables['time']
+    datetimes = num2date(time[:].squeeze(), time.units)
+    fig = plt.figure(figsize = [15,5])
+    plt.plot(datetimes, temp[:].squeeze()-273.15, 'r-', label='Temperatue (c)')
+    plt.plot(datetimes, dp[:].squeeze()-273.15, 'b-', label=r't$_{dp}$ (c)')
+    plt.legend()
+    plt.title('Time Series for Graciosa')
+    plt.savefig(ofile)
+    plt.close(fig)
+    return datetimes[0]
+
+
+def save_latest_gfs_grw_ttd():
+    my_ncss = give_me_latest_gfs()
+    my_ts = get_me_grw_ts(my_ncss, ['Temperature_height_above_ground',
+               'Dewpoint_temperature_height_above_ground'])
+    local_fig =  tempfile.NamedTemporaryFile(suffix='.png')
+    fn = local_fig.name
+    fig_datetime = plot_ttd_gra(my_ts, fn)
+    s3_key = 'time_series_gfs/' + gen_s3_key(fig_datetime, 'T_ts_timeseries_GFS_GRW')
+    s3 = boto3.resource('s3')
+    data = open(fn, 'rb')
+    s3.Bucket('aceena').put_object(Key=s3_key, Body=data, ACL='public-read')
+    data.close()
+
+
+
+
 
