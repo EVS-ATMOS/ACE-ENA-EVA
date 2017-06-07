@@ -91,7 +91,7 @@ def ir_plot(mydata, ofile):
 
     # Contour temperature at each lat/long
     cf = ax.pcolormesh(lon_2d, lat_2d, temp_vals, transform=ccrs.PlateCarree(), zorder=0,
-                     cmap='coolwarm')
+                     cmap='coolwarm', vmin = -55, vmax = 25)
 
     # Plot a colorbar to show temperature and reduce the size of it
     plt.colorbar(cf, ax=ax, fraction=0.032)
