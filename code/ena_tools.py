@@ -319,3 +319,73 @@ def nine_panel_s3():
                                         scale=scales[i], pref=prefs[i])
         plt.savefig(fn)
         save_one_9pan(names[i], fn, fig_datetime)
+
+def get_me_grw_ths(ncss, varss):
+    query = ncss.query()
+    now = datetime.utcnow()
+    gra_lat = 39.0525
+    gra_lon = -28.0069
+    query.lonlat_point(gra_lon, gra_lat).all_times()
+    query.variables(*varss).accept('netcdf')
+    data = ncss.get_data(query)
+    return data
+
+def ths(data_set, vert_var_bg = 'isobaric', vert_var_c = 'isobaric',
+        pref_bg = u'T forecast (\u00b0C)',
+        pref_c = 'Humdity (\%)',
+             background_var = 'Temperature_isobaric',
+              cont_var = 'Relative_humidity_isobaric',
+             oset_1 = -273.15, scale_1 = 1.,
+             vmin_1 = -80, vmax_1 = 25,
+       clevs = [50,90,99], colors = ['r', 'b', 'k'],
+       fmt = '%1.0f', con_size = 10):
+    fig = plt.figure(figsize = [15,5])
+    vert_bg = data_set.variables[vert_var_bg][:].squeeze()[0,:]/100
+    vert_c = data_set.variables[vert_var_c][:].squeeze()[0,:]/100
+    time = data_set.variables['time']
+    datetimes = num2date(time[:].squeeze(), time.units)
+    mapb = plt.pcolormesh(datetimes, vert_bg,
+                   scale_1 * data_set.variables[background_var][:].squeeze().transpose() + oset_1,
+                         vmin = vmin_1,
+                         vmax = vmax_1)
+    con = plt.contour(datetimes, vert_c,
+               data_set.variables[cont_var][:].squeeze().transpose(),
+               levels = clevs, colors = colors)
+    plt.xlabel('Time (UTC)')
+    plt.ylabel('Pressure Level (hPa)')
+    plt.clabel(con, inline=1, fontsize=con_size, fmt=fmt)
+    plt.ylim([1000,0])
+    time_val = datetimes[0]
+    pref = pref_bg + ' and ' + pref_c
+    plt.gca().set_title(pref + ' for {0:%d %B %Y %H:%MZ}'.format(time_val),
+                 fontsize=10)
+    plt.colorbar(mappable = mapb)
+    return datetimes[0]
+
+def th_plots():
+    my_ncss = give_me_latest_gfs()
+    my_var = ['Temperature_isobaric', 'Relative_humidity_isobaric',
+              'Vertical_velocity_pressure_isobaric',
+             'Cloud_mixing_ratio_isobaric']
+    my_data = get_me_grw_ths(my_ncss, my_var)
+    fig_datetime = ths(my_data, vert_var_bg = 'isobaric3',
+                                 background_var = 'Vertical_velocity_pressure_isobaric',
+                                 oset_1 = 0., scale_1 = 1.0,
+                                 vmin_1 = -0.5, vmax_1 = 1,
+                                pref_bg = u'Omega (hPa/s)')
+    local_fig =  tempfile.NamedTemporaryFile(suffix='.png')
+    fn = local_fig.name
+    plt.savefig(fn)
+    save_one_9pan('time_height_omega_rh', fn, fig_datetime)
+
+    fig_datetime = ths(my_data, vert_var_bg = 'isobaric3',
+                                 background_var = 'Cloud_mixing_ratio_isobaric',
+                                 oset_1 = 0., scale_1 = 1000.0,
+                                 vmin_1 = 0, vmax_1 = 0.5,
+                                pref_bg = u'Omega (hPa/s)')
+    #local_fig =  tempfile.NamedTemporaryFile(suffix='.png')
+    #fn = local_fig.name
+    plt.savefig(fn)
+    save_one_9pan('time_height_cld_rh', fn, fig_datetime)
+
+
