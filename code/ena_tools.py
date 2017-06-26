@@ -17,6 +17,10 @@ import cartopy.feature as cfeature
 import tempfile
 import boto3
 from siphon.catalog import get_latest_access_url
+import pygrib
+import tempfile
+import xarray
+
 
 
 def gen_s3_key(fig_datetime, pref, sfx=''):
@@ -387,5 +391,133 @@ def th_plots():
     #fn = local_fig.name
     plt.savefig(fn)
     save_one_9pan('time_height_cld_rh', fn, fig_datetime)
+
+def get_ecmwf_137():
+    levels_loc = os.path.join(os.path.expanduser('~'), 'projects/ACE-ENA-EVA/ecmwf_137_levels.txt')
+    levels = np.genfromtxt(levels_loc, missing_values='-')
+    ht = levels[1::, 6]
+    pres = levels[1::, 3]
+    return ht, pres
+
+def extract_3d_grib(grb_obj, search_term):
+    grb_list = grb_obj.select(name=search_term)
+    level_nums = [this_grb['level'] for this_grb in grb_list]
+    order =  np.array(level_nums).argsort()
+    lats, lons = grb_list[0].latlons()
+    transfer_array = np.empty([len(order), lats.shape[0], lats.shape[1]])
+    for i in range(len(order)):
+        transfer_array[i,:,:] = grb_list[order[i]].values
+
+    return transfer_array, lats, lons
+
+def ecmwf_name_to_date(ename):
+    start_time = datetime.strptime('2017'+ename[3:11], '%Y%m%d%H%M')
+    valid_time = datetime.strptime('2017'+ename[11:19], '%Y%m%d%H%M')
+    return start_time, valid_time
+
+def file_list_to_date(file_list):
+    start_times = [ecmwf_name_to_date(this_name)[0] for this_name in file_list]
+    end_times = [ecmwf_name_to_date(this_name)[1] for this_name in file_list]
+    return start_times, end_times
+
+def get_run_hours(file_list):
+    gen_t, val_t = file_list_to_date(file_list)
+    gen_hour = np.array([dt.hour for dt in gen_t])
+    return np.unique(gen_hour)
+
+def get_time_for_run(file_list, gen_hour):
+    gen_t, val_t = file_list_to_date(file_list)
+    gen_hours = np.array([dt.hour for dt in gen_t])
+    good_files = []
+    good_times_gen = []
+    good_times_val = []
+    for i in range(len(gen_hours)):
+        if gen_hours[i] == gen_hour:
+            good_files.append(file_list[i])
+            good_times_gen.append(gen_t[i])
+            good_times_val.append(val_t[i])
+
+    return good_files, good_times_gen, good_times_val
+
+def create_bundle_latest(var_list, n=None):
+    username_file = os.path.join(os.path.expanduser('~'), 'ecmwf_username')
+    password_file = os.path.join(os.path.expanduser('~'), 'ecmwf_passwd')
+    uname_fh = open(username_file, 'r')
+    uname = uname_fh.readline()[0:-1]
+    uname_fh.close()
+    passwd_fh = open(password_file, 'r')
+    passwd = passwd_fh.readline()[0:-1]
+    passwd_fh.close()
+    host = 'dissemination.ecmwf.int'
+
+    #get ECMWF vert coord
+    ht, pres = get_ecmwf_137()
+    ftp = ftplib.FTP(host)
+    ftp.login(user=uname, passwd = passwd )
+    closest_now = datetime.utcnow().strftime('%Y%m%d')
+    ftp.cwd(closest_now)
+    lst = ftp.nlst()
+    lst.sort()
+
+    run_hours = get_run_hours(lst)
+    target_files, generated_times, valid_times = get_time_for_run(lst, run_hours[-1])
+
+    if n is None:
+        these_target_files = target_files[1::]
+        these_run_times = generated_times[1::]
+        these_valid_times = valid_times[1::]
+    else:
+        these_target_files = target_files[1:n]
+        these_run_times = generated_times[1:n]
+        these_valid_times = valid_times[1:n]
+
+    bundle = {}
+
+    for var_name in var_list:
+        bundle.update({var_name: []})
+
+    for i in range(len(these_valid_times)):
+        print(these_target_files[i])
+        fh = tempfile.NamedTemporaryFile()
+        ftp.retrbinary('RETR ' + these_target_files[i], fh.write)
+        grbs = pygrib.open(fh.name)
+        grbs.seek(0)
+        for var_name in var_list:
+            this_step, lats, lons = extract_3d_grib(grbs, var_name)
+            bundle[var_name].append(this_step)
+        grbs.close()
+
+    return bundle, these_valid_times, these_run_times, lats, lons
+
+def concat_bundle(bundle):
+    varss = list(bundle.keys())
+    n_times = len(bundle[varss[0]])
+    hlatlon = bundle[varss[0]][0].shape
+    unwound = {}
+    for this_var in varss:
+        transfer = np.empty([n_times, 136, hlatlon[1], hlatlon[2]])
+        for time_step in range(n_times):
+            transfer[time_step, 0:136, :, :] = bundle[this_var][time_step][0:136, :, :]
+        unwound.update({this_var: transfer})
+    return unwound
+
+def unwind_to_xarray(unwound, valid_times, lats, lons):
+    ds = xarray.Dataset()
+    for vvar in list(unwound.keys()):
+        my_data = xarray.DataArray(unwound[vvar],
+                                   dims = ('time', 'z', 'y', 'x'),
+                                  coords = {'time' : (['time'], valid_times),
+                                           'z' : (['z'], get_ecmwf_137()[0][0:136]),
+                                           'lat' :(['y','x'], lats),
+                                           'lon' : (['y','x'],my_lons)})
+        ds[vvar.replace(' ', '_')] = my_data
+
+    ds.lon.attrs = [('long_name', 'longitude of grid cell center'),
+             ('units', 'degrees_east'),
+             ('bounds', 'xv')]
+    ds.lat.attrs = [('long_name', 'latitude of grid cell center'),
+             ('units', 'degrees_north'),
+             ('bounds', 'yv')]
+    return ds
 
 
