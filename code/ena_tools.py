@@ -528,7 +528,7 @@ def unwind_to_xarray(unwound, valid_times, lats, lons, metadata, trans={}):
         my_data = xarray.DataArray(unwound[vvar],
                                    dims = ('time', 'z', 'y', 'x'),
                                   coords = {'time' : (['time'], valid_times),
-                                           'z' : (['z'], get_ecmwf_137()[0][0:136]),
+                                           'height' : (['z'], get_ecmwf_137()[0][0:136]),
                                            'lat' :(['y','x'], lats),
                                            'lon' : (['y','x'],lons)})
         ds[vvar.replace(' ', '_')] = my_data
@@ -542,11 +542,11 @@ def unwind_to_xarray(unwound, valid_times, lats, lons, metadata, trans={}):
         ds[vvar.replace(' ', '_')].encoding['_FillValue'] = -9999
 
     ds.lon.attrs = [('long_name', 'longitude of grid cell center'),
-             ('units', 'degrees_east'),
-             ('bounds', 'xv')]
+             ('units', 'degrees_east')]
     ds.lat.attrs = [('long_name', 'latitude of grid cell center'),
-             ('units', 'degrees_north'),
-             ('bounds', 'yv')]
+             ('units', 'degrees_north')]
+    ds.height.attrs['long_name'] = "height above sea sea level"
+    ds.height.attrs['units'] = "m"
 
     ds.z.encoding['_FillValue'] = None
     ds.lat.encoding['_FillValue'] = None
