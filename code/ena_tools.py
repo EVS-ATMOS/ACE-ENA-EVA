@@ -583,3 +583,79 @@ def save_one_ecmwf_clouds(dataset, gen_datetime):
                                    Body=data2, ACL='public-read')
     data2.close()
 
+def ecm_tile_sum(ax, var1, var2, vlims, tstep, levels, colors, fmt='%0.5f'):
+    ter_lat = 38.7216
+    ter_lon = -27.2206
+    gra_lat = 39.0525
+    gra_lon = -28.0069
+    pc = var1[tstep].sum(dim=('z',)).plot.pcolormesh(ax=ax,
+                                                transform=ccrs.PlateCarree(),
+                                                x='lon', y='lat', vmin=vlims[0],
+                                                    vmax=vlims[1])
+
+    cs = var2[tstep].sum(dim=('z',)).plot.contour(ax=ax,
+                                                  transform=ccrs.PlateCarree(),
+                                                  x='lon', y='lat', levels=levels,
+                                                 colors=colors)
+    plt.clabel(cs, inline=1, fontsize=10, fmt=fmt)
+    ax.set_xticks([-23, -24, -26, -28 ], crs=ccrs.PlateCarree())
+    ax.set_yticks([37,39,41], crs=ccrs.PlateCarree())
+    lon_formatter = LongitudeFormatter(zero_direction_label=True)
+    lat_formatter = LatitudeFormatter()
+    ax.xaxis.set_major_formatter(lon_formatter)
+    ax.yaxis.set_major_formatter(lat_formatter)
+
+    ax.plot([ter_lon, gra_lon], [ter_lat, gra_lat],
+           'ro', transform=ccrs.PlateCarree())
+
+    ax.text(ter_lon+.2, ter_lat+.2,
+            'Tericia', transform=ccrs.PlateCarree(), fontsize = 16)
+
+    ax.text(gra_lon+.2, gra_lat+.2,
+            'Graciosa', transform=ccrs.PlateCarree(), fontsize = 16)
+
+
+    coast = cfeature.NaturalEarthFeature(category='physical', scale='10m',
+                                    facecolor='none', name='coastline')
+
+    _ = ax.add_feature(coast, edgecolor='black')
+    return pc, cs
+
+def nine_panel_ecm_sum(var1, var2, vlims, tsteps, levels, colors, fmt='%0.5f'):
+    f, ((ax1, ax2, ax3),
+        (ax4, ax5, ax6),
+        (ax7, ax8, ax9)) = plt.subplots(3,3, figsize = [20,15],
+                                        subplot_kw={'projection': ccrs.PlateCarree()})
+
+    axxx = [ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9]
+    for i in range(len(axxx)):
+        _,_ = ecm_tile_sum(axxx[i], var1, var2, vlims, tsteps[i], levels, colors, fmt='%0.5f')
+
+def save_one_ecmwf_cloud9(dataset, gen_datetime):
+    start_str = gen_datetime.strftime('%Y%m%d_%H%M')
+    s3name = 'ecmwf_sum_clwc_ciwc_9pan'
+    plt.figure(figsize=(25,19))
+    my_levels = [0.0001, 0.05, 0.1, 1.0]
+    my_colors = ['white', 'yellow', 'cyan', 'pink']
+    nine_panel_ecm_sum(dataset.Specific_cloud_liquid_water_content*1000.0,
+                      dataset.Specific_cloud_ice_water_content*1000.0,
+                      [0.0, 4.0], [0,2,4,6,12,18,24,30,38] , my_levels, my_colors, fmt='%0.5f')
+
+    str1 = start_str + ' ECMWF sum of liquid and ice cloud water in column (g/kg) \n'
+    str2 = 'ACE-ENA forecast guidence. ARM Climate Research Facility. scollis@anl.gov'
+    plt.suptitle(str1+str2)
+    local_fig =  tempfile.NamedTemporaryFile(suffix='.png')
+    fn = local_fig.name
+    plt.savefig(fn)
+
+    s3_key = s3name + '/' + gen_s3_key(gen_datetime, s3name)
+    s3 = boto3.resource('s3')
+    data = open(fn, 'rb')
+    s3.Bucket('aceena').put_object(Key=s3_key, Body=data, ACL='public-read')
+    data.close()
+    data2 = open(fn, 'rb')
+    s3.Bucket('aceena').put_object(Key='latest_' + s3name + '.png',
+                                   Body=data2, ACL='public-read')
+    data2.close()
+
+

@@ -14,6 +14,7 @@ if __name__ == '__main__':
     trans = {'cfName': 'standard_name'}
     my_dataset = ena_tools.unwind_to_xarray(my_unwind, my_these_valid_times, my_lats, my_lons, metad, trans=trans)
     ena_tools.save_one_ecmwf_clouds(my_dataset, my_these_run_times[0])
+    ena_tools.save_one_ecmwf_cloud9(my_dataset, my_these_run_times[0])
 
     my_dataset.attrs['Conventions'] = 'CF-1.6'
     my_dataset.attrs['source'] = 'ECMWF 137 level 0.1 degree model'
