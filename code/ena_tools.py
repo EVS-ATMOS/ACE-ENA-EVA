@@ -399,13 +399,19 @@ def get_ecmwf_137():
     pres = levels[1::, 3]
     return ht, pres
 
-def extract_3d_grib(grb_obj, search_term):
+def extract_3d_grib(grb_obj, search_term, skip_last=False):
     grb_list = grb_obj.select(name=search_term)
     level_nums = [this_grb['level'] for this_grb in grb_list]
     order =  np.array(level_nums).argsort()
     lats, lons = grb_list[0].latlons()
-    transfer_array = np.empty([len(order), lats.shape[0], lats.shape[1]])
-    for i in range(len(order)):
+    shp = grb_list[order[0]].values.shape
+    transfer_array = np.empty([len(order), shp[0], shp[1]])
+    if skip_last:
+        llen = len(order) -1
+    else:
+        llen = len(order)
+
+    for i in range(llen):
         transfer_array[i,:,:] = grb_list[order[i]].values
 
     return transfer_array, lats, lons
@@ -439,7 +445,7 @@ def get_time_for_run(file_list, gen_hour):
 
     return good_files, good_times_gen, good_times_val
 
-def create_bundle_latest(var_list, n=None):
+def create_bundle_latest(var_list, n=None, skippy = None):
     username_file = os.path.join(os.path.expanduser('~'), 'ecmwf_username')
     password_file = os.path.join(os.path.expanduser('~'), 'ecmwf_passwd')
     uname_fh = open(username_file, 'r')
@@ -461,6 +467,8 @@ def create_bundle_latest(var_list, n=None):
 
     run_hours = get_run_hours(lst)
     target_files, generated_times, valid_times = get_time_for_run(lst, run_hours[-1])
+    if skippy is None:
+        skippy = len(var_list)*[False]
 
     if n is None:
         these_target_files = target_files[1::]
@@ -482,12 +490,14 @@ def create_bundle_latest(var_list, n=None):
         ftp.retrbinary('RETR ' + these_target_files[i], fh.write)
         grbs = pygrib.open(fh.name)
         grbs.seek(0)
-        for var_name in var_list:
-            this_step, lats, lons = extract_3d_grib(grbs, var_name)
+        for i in range(len(var_list)):
+            var_name = var_list[i]
+            this_step, lats, lons = extract_3d_grib(grbs, var_name, skip_last = skippy[i])
             bundle[var_name].append(this_step)
         grbs.close()
 
     return bundle, these_valid_times, these_run_times, lats, lons
+
 
 def concat_bundle(bundle):
     varss = list(bundle.keys())
@@ -520,4 +530,32 @@ def unwind_to_xarray(unwound, valid_times, lats, lons):
              ('bounds', 'yv')]
     return ds
 
+def save_one_ecmwf_clouds(dataset, gen_datetime):
+    start_str = gen_datetime.strftime('%Y%m%d_%H%M')
+    s3name = 'ecmwf_time_height_clwc_ciwc'
+    plt.figure(figsize=(17,5))
+    my_levels = [0.01, 0.05, 0.09, 0.13]
+    my_colors = ['white', 'yellow', 'cyan', 'pink']
+    (my_dataset.Specific_cloud_liquid_water_content*1000.0).mean(dim=('y','x')).plot.pcolormesh(x='time', y='z')
+    cs = (my_dataset.Specific_cloud_ice_water_content*1000.0).max(dim=('y','x')).plot.contour(x='time', y='z',
+                                                                                         levels=my_levels,
+                                                                                         colors=my_colors)
+    plt.clabel(cs, inline=1, fontsize=10, fmt='%0.3f')
+    plt.ylim([0,12000])
+    str1 = start_str + ' ECMWF Domain max cloud ice and domain mean cloud liquid water content (g/kg) \n'
+    str2 = 'ACE-ENA forecast guidence. ARM Climate Research Facility. scollis@anl.gov'
+    plt.title(str1+str2)
+    local_fig =  tempfile.NamedTemporaryFile(suffix='.png')
+    fn = local_fig.name
+    plt.savefig(fn)
+
+    s3_key = s3name + '/' + gen_s3_key(gen_datetime, s3name)
+    s3 = boto3.resource('s3')
+    data = open(fn, 'rb')
+    s3.Bucket('aceena').put_object(Key=s3_key, Body=data, ACL='public-read')
+    data.close()
+    data2 = open(fn, 'rb')
+    s3.Bucket('aceena').put_object(Key='latest_' + s3name + '.png',
+                                   Body=data2, ACL='public-read')
+    data2.close()
 
