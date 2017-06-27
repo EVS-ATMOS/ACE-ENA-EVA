@@ -12,7 +12,7 @@ if __name__ == '__main__':
     my_bundle, my_these_valid_times, my_these_run_times, my_lats, my_lons = tpl
     my_unwind = ena_tools.concat_bundle(my_bundle)
     my_dataset = ena_tools.unwind_to_xarray(my_unwind, my_these_valid_times, my_lats, my_lons)
-    save_one_ecmwf_clouds(my_dataset, my_these_run_times[0])
+    ena_tools.save_one_ecmwf_clouds(my_dataset, my_these_run_times[0])
     sstting = '/lcrc/group/earthscience/ecmwf/%Y%m%d/'
     fst = 'ecmwf_%Y%m%d_%H%M.nc'
     local_dir = my_these_run_times[0].strftime(sstting)
