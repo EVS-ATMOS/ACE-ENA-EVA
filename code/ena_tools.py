@@ -20,7 +20,7 @@ from siphon.catalog import get_latest_access_url
 import pygrib
 import tempfile
 import xarray
-
+import os
 
 
 def gen_s3_key(fig_datetime, pref, sfx=''):
