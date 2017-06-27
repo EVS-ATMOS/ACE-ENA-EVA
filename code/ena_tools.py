@@ -520,7 +520,7 @@ def unwind_to_xarray(unwound, valid_times, lats, lons):
                                   coords = {'time' : (['time'], valid_times),
                                            'z' : (['z'], get_ecmwf_137()[0][0:136]),
                                            'lat' :(['y','x'], lats),
-                                           'lon' : (['y','x'],my_lons)})
+                                           'lon' : (['y','x'],lons)})
         ds[vvar.replace(' ', '_')] = my_data
 
     ds.lon.attrs = [('long_name', 'longitude of grid cell center'),
