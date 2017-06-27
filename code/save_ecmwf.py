@@ -15,7 +15,7 @@ if __name__ == '__main__':
     my_dataset = ena_tools.unwind_to_xarray(my_unwind, my_these_valid_times, my_lats, my_lons, metad, trans=trans)
     ena_tools.save_one_ecmwf_clouds(my_dataset, my_these_run_times[0])
 
-    my_dataset.attrs['conventions'] = 'CF 1.6'
+    my_dataset.attrs['Conventions'] = 'CF-1.6'
     my_dataset.attrs['source'] = 'ECMWF 137 level 0.1 degree model'
     my_dataset.attrs['conatact'] = 'Scott Collis, scollis@anl.gov'
     st1 = "European Center for Medium range Weather Forecasting, "
@@ -27,6 +27,12 @@ if __name__ == '__main__':
     my_dataset.z.encoding['_FillValue'] = -9999
     my_dataset.lat.encoding['_FillValue'] = -9999
     my_dataset.lon.encoding['_FillValue'] = -9999
+
+    my_dataset.Specific_cloud_ice_water_content.attrs['standard_name'] = 'cloud_ice_mixing_ratio'
+    my_dataset.Specific_cloud_liquid_water_content.attrs['standard_name'] = 'cloud_liquid_water_mixing_ratio'
+    my_dataset.Specific_rain_water_content.attrs['standard_name'] = 'rain_water_content'
+    my_dataset.Specific_snow_water_content.attrs['standard_name'] = 'snow_water_content'
+
     sstting = '/lcrc/group/earthscience/ecmwf/%Y%m%d/'
     fst = 'ecmwf_%Y%m%d_%H%M.nc'
     local_dir = my_these_run_times[0].strftime(sstting)
