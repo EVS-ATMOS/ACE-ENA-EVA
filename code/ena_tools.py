@@ -400,12 +400,20 @@ def get_ecmwf_137():
     pres = levels[1::, 3]
     return ht, pres
 
-def extract_3d_grib(grb_obj, search_term, skip_last=False):
+def extract_3d_grib(grb_obj, search_term, skip_last=False,
+                   metadata_list = None):
+
+    if metadata_list is None:
+        metadata_list = ['units', 'cfName']
     grb_list = grb_obj.select(name=search_term)
     level_nums = [this_grb['level'] for this_grb in grb_list]
     order =  np.array(level_nums).argsort()
     lats, lons = grb_list[0].latlons()
     shp = grb_list[order[0]].values.shape
+    metadata = {}
+    for nm in metadata_list:
+        metadata.update({nm: grb_list[order[0]][nm]})
+
     transfer_array = np.empty([len(order), shp[0], shp[1]])
     if skip_last:
         llen = len(order) -1
@@ -415,7 +423,7 @@ def extract_3d_grib(grb_obj, search_term, skip_last=False):
     for i in range(llen):
         transfer_array[i,:,:] = grb_list[order[i]].values
 
-    return transfer_array, lats, lons
+    return transfer_array, lats, lons, metadata
 
 def ecmwf_name_to_date(ename):
     start_time = datetime.strptime('2017'+ename[3:11], '%Y%m%d%H%M')
@@ -491,13 +499,15 @@ def create_bundle_latest(var_list, n=None, skippy = None):
         ftp.retrbinary('RETR ' + these_target_files[i], fh.write)
         grbs = pygrib.open(fh.name)
         grbs.seek(0)
+        meta = {}
         for i in range(len(var_list)):
             var_name = var_list[i]
-            this_step, lats, lons = extract_3d_grib(grbs, var_name, skip_last = skippy[i])
+            this_step, lats, lons, metadata = extract_3d_grib(grbs, var_name, skip_last = skippy[i])
             bundle[var_name].append(this_step)
+            meta.update({var_name: metadata})
         grbs.close()
 
-    return bundle, these_valid_times, these_run_times, lats, lons
+    return bundle, these_valid_times, these_run_times, lats, lons, meta
 
 
 def concat_bundle(bundle):
@@ -512,7 +522,7 @@ def concat_bundle(bundle):
         unwound.update({this_var: transfer})
     return unwound
 
-def unwind_to_xarray(unwound, valid_times, lats, lons):
+def unwind_to_xarray(unwound, valid_times, lats, lons, metadata, trans={}):
     ds = xarray.Dataset()
     for vvar in list(unwound.keys()):
         my_data = xarray.DataArray(unwound[vvar],
@@ -522,6 +532,14 @@ def unwind_to_xarray(unwound, valid_times, lats, lons):
                                            'lat' :(['y','x'], lats),
                                            'lon' : (['y','x'],lons)})
         ds[vvar.replace(' ', '_')] = my_data
+        t_keys = list(trans.keys())
+        for mvar in list(metadata[vvar].keys()):
+            if mvar in t_keys:
+                ds[vvar.replace(' ', '_')].attrs[trans[mvar]] = metadata[vvar][mvar]
+            else:
+                 ds[vvar.replace(' ', '_')].attrs[mvar] = metadata[vvar][mvar]
+
+        ds[vvar.replace(' ', '_')].encoding['_FillValue'] = -9999
 
     ds.lon.attrs = [('long_name', 'longitude of grid cell center'),
              ('units', 'degrees_east'),
@@ -529,6 +547,11 @@ def unwind_to_xarray(unwound, valid_times, lats, lons):
     ds.lat.attrs = [('long_name', 'latitude of grid cell center'),
              ('units', 'degrees_north'),
              ('bounds', 'yv')]
+
+    ds.z.encoding['_FillValue'] = None
+    ds.lat.encoding['_FillValue'] = None
+    ds.lon.encoding['_FillValue'] = None
+
     return ds
 
 def save_one_ecmwf_clouds(dataset, gen_datetime):
