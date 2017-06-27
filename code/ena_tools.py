@@ -21,6 +21,7 @@ import pygrib
 import tempfile
 import xarray
 import os
+import ftplib
 
 
 def gen_s3_key(fig_datetime, pref, sfx=''):
