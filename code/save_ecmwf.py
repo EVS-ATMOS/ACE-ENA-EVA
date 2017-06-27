@@ -20,6 +20,6 @@ if __name__ == '__main__':
     print(local_file)
     if not os.path.exists(local_dir):
         os.mkdirs(local_dir)
-    my_dataset.to_netcdf(local_dir+)
+    my_dataset.to_netcdf(local_dir + local_file)
 
 
