@@ -23,6 +23,7 @@ import xarray
 import os
 import ftplib
 import metpy
+from metpy import plots
 
 
 def gen_s3_key(fig_datetime, pref, sfx=''):
