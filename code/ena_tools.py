@@ -560,7 +560,8 @@ def save_one_ecmwf_clouds(dataset, gen_datetime):
     plt.figure(figsize=(17,5))
     my_levels = [0.01, 0.05, 0.09, 0.13]
     my_colors = ['white', 'yellow', 'cyan', 'pink']
-    (dataset.Specific_cloud_liquid_water_content*1000.0).mean(dim=('y','x')).plot.pcolormesh(x='time', y='z')
+    (dataset.Specific_cloud_liquid_water_content*1000.0).mean(dim=('y','x')).plot.pcolormesh(x='time',
+                                                                                        y='height')
     cs = (dataset.Specific_cloud_ice_water_content*1000.0).max(dim=('y','x')).plot.contour(x='time',
                                                                                          y='height',
                                                                                          levels=my_levels,
@@ -687,3 +688,12 @@ def calc_vap_pressure(p, q):
     vap_pres.name = 'vapor_pressure'
     return vap_pres
 
+def calc_dewpoint(vap_pres):
+    top = np.log(vap_pres/6.112)*243.5
+    bottom = 17.67 - np.log(vap_pres/6.112)
+    td = top/bottom
+    td.attrs['standard_name'] = 'dewpoint_temperature'
+    td.attrs['comment'] = 'derived from vapor pressure'
+    td.attrs['units'] = 'K'
+    td.name = 'dewpoint'
+    return td
