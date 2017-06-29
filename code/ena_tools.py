@@ -22,6 +22,7 @@ import tempfile
 import xarray
 import os
 import ftplib
+import metpy
 
 
 def gen_s3_key(fig_datetime, pref, sfx=''):
@@ -697,3 +698,84 @@ def calc_dewpoint(vap_pres):
     td.attrs['units'] = 'K'
     td.name = 'dewpoint'
     return td
+
+def plot_skew_t(fig, T, Td, P, u, v, time_step, sp = (1,1,1)):
+    col_P = P.mean(dim=('y','x')).sel(time=time_step, method='nearest')
+    col_Td = Td.mean(dim=('y','x')).sel(time=time_step, method='nearest')
+    col_u = u.mean(dim=('y','x')).sel(time=time_step, method='nearest')
+    col_v = v.mean(dim=('y','x')).sel(time=time_step, method='nearest')
+    col_T = T.mean(dim=('y','x')).sel(time=time_step, method='nearest')
+    skew = metpy.plots.SkewT(fig=fig, subplot=sp)
+    col1 = skew.plot(col_P, col_T - 273.15 , 'r')
+    col2 = skew.plot(col_P, col_Td, 'g')
+    my_interval = np.arange(100, 1000, 80)
+
+    # Get indexes of values closest to defined interval
+    ix = metpy.calc.resample_nn_1d(col_P, my_interval)
+    skew.plot_barbs(col_P[ix], col_u[ix], col_v[ix])
+    skew.plot_dry_adiabats()
+    skew.plot_moist_adiabats()
+    skew.plot_mixing_lines()
+    skew.ax.set_ylim(1000, 200)
+    skew.ax.set_xlim(-30,30)
+    a = datetime.utcfromtimestamp(col_T.time.values.tolist()/1e9)
+    plt.title(datetime.strftime(a, 'SkewT at %Y-%m-%d %H:%mZ'))
+    return skew
+
+def save_skews(temperature, dewpoint, pressure, uwind, vwind, times):
+    t0 = times.values[0]
+    analysis_hour = datetime.utcfromtimestamp(t0.tolist()/1e9).hour
+    #if at 12Z then we want panel 2 to be next day at 9Z. so 21 h later
+    if analysis_hour == 12:
+        t1 = t0 + np.timedelta64(21,'h')
+    else:
+        t1 = t0 + np.timedelta64(9,'h')
+
+    t2 = t1 + np.timedelta64(24,'h')
+    t3 = t2 + np.timedelta64(24,'h')
+    fig = plt.figure(figsize=[16,16])
+
+    plot_skew_t(fig, temperature, dewpoint, pressure,
+                uwind, vwind, t0, sp=(2,2,1))
+
+    plot_skew_t(fig, temperature, dewpoint, pressure,
+                uwind, vwind, t1, sp=(2,2,2))
+
+    plot_skew_t(fig, temperature, dewpoint, pressure,
+                uwind, vwind, t2, sp=(2,2,3))
+
+    plot_skew_t(fig, temperature, dewpoint, pressure,
+                uwind, vwind, t3, sp=(2,2,4))
+
+    a = datetime.utcfromtimestamp(t0.tolist()/1e9)
+    start_str = datetime.strftime(a, '%Y-%m-%d %H:%mZ')
+
+    str1 = start_str + ' ECMWF Temperature, winds and dewpoint (derived)\n'
+    str2 = 'ACE-ENA forecast guidence. ARM Climate Research Facility. scollis@anl.gov'
+    plt.suptitle(str1+str2)
+
+def save_skews_s3(temperature, dewpoint, pressure, uwind, vwind, times, gen_datetime = None):
+    s3name = 'ecmwf_soundings'
+    if gen_datetime is None:
+        gen_datetime = datetime.utcfromtimestamp(times.values[0].tolist()/1e9)
+
+    save_skews(temperature, dewpoint, pressure, uwind, vwind, times)
+
+    local_fig =  tempfile.NamedTemporaryFile(suffix='.png')
+    fn = local_fig.name
+    plt.savefig(fn)
+
+    s3_key = s3name + '/' + gen_s3_key(gen_datetime, s3name)
+    s3 = boto3.resource('s3')
+    data = open(fn, 'rb')
+    s3.Bucket('aceena').put_object(Key=s3_key, Body=data, ACL='public-read')
+    data.close()
+    data2 = open(fn, 'rb')
+    s3.Bucket('aceena').put_object(Key='latest_' + s3name + '.png',
+                                   Body=data2, ACL='public-read')
+    data2.close()
+
+
+
+
+
