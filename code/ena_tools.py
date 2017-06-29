@@ -561,8 +561,7 @@ def save_one_ecmwf_clouds(dataset, gen_datetime):
     my_levels = [0.01, 0.05, 0.09, 0.13]
     my_colors = ['white', 'yellow', 'cyan', 'pink']
     (dataset.Specific_cloud_liquid_water_content*1000.0).mean(dim=('y','x')).plot.pcolormesh(x='time', y='z')
-    cs =
-    (dataset.Specific_cloud_ice_water_content*1000.0).max(dim=('y','x')).plot.contour(x='time',
+    cs = (dataset.Specific_cloud_ice_water_content*1000.0).max(dim=('y','x')).plot.contour(x='time',
                                                                                          y='height',
                                                                                          levels=my_levels,
                                                                                          colors=my_colors)
