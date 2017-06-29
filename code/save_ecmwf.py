@@ -13,9 +13,6 @@ if __name__ == '__main__':
     my_unwind = ena_tools.concat_bundle(my_bundle)
     trans = {'cfName': 'standard_name'}
     my_dataset = ena_tools.unwind_to_xarray(my_unwind, my_these_valid_times, my_lats, my_lons, metad, trans=trans)
-    ena_tools.save_one_ecmwf_clouds(my_dataset, my_these_run_times[0])
-    ena_tools.save_one_ecmwf_cloud9(my_dataset, my_these_run_times[0])
-
     my_dataset.attrs['Conventions'] = 'CF-1.6'
     my_dataset.attrs['source'] = 'ECMWF 137 level 0.1 degree model'
     my_dataset.attrs['conatact'] = 'Scott Collis, scollis@anl.gov'
@@ -33,6 +30,19 @@ if __name__ == '__main__':
     my_dataset.Specific_cloud_liquid_water_content.attrs['standard_name'] = 'cloud_liquid_water_mixing_ratio'
     my_dataset.Specific_rain_water_content.attrs['standard_name'] = 'rain_water_content'
     my_dataset.Specific_snow_water_content.attrs['standard_name'] = 'snow_water_content'
+
+    pressure_4d = ena_tools.get_pres4d(my_dataset.Specific_humidity)
+    my_dataset['Relative_humidity'] = ena_tools.calc_rh(my_dataset.Specific_humidity,
+                                                    pressure_4d, my_dataset.Temperature)
+    vap_pres = ena_tools.calc_vap_pressure(pressure_4d, my_dataset.Specific_humidity)
+    dewpoint = ena_tools.calc_dewpoint(vap_pres)
+
+    ena_tools.save_one_ecmwf_clouds(my_dataset, my_these_run_times[0])
+    ena_tools.save_one_ecmwf_cloud9(my_dataset, my_these_run_times[0])
+    ena_tools.save_skews_s3(my_dataset.Temperature, dewpoint, pressure_4d,
+          my_dataset.U_component_of_wind, my_dataset.V_component_of_wind,
+          my_dataset.time, gen_datetime= my_these_run_times[0])
+
 
     sstting = '/lcrc/group/earthscience/ecmwf/%Y%m%d/'
     fst = 'ecmwf_%Y%m%d_%H%M.nc'
