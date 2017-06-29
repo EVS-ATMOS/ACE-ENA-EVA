@@ -561,7 +561,9 @@ def save_one_ecmwf_clouds(dataset, gen_datetime):
     my_levels = [0.01, 0.05, 0.09, 0.13]
     my_colors = ['white', 'yellow', 'cyan', 'pink']
     (dataset.Specific_cloud_liquid_water_content*1000.0).mean(dim=('y','x')).plot.pcolormesh(x='time', y='z')
-    cs = (dataset.Specific_cloud_ice_water_content*1000.0).max(dim=('y','x')).plot.contour(x='time', y='z',
+    cs =
+    (dataset.Specific_cloud_ice_water_content*1000.0).max(dim=('y','x')).plot.contour(x='time',
+                                                                                         y='height',
                                                                                          levels=my_levels,
                                                                                          colors=my_colors)
     plt.clabel(cs, inline=1, fontsize=10, fmt='%0.3f')
@@ -658,4 +660,31 @@ def save_one_ecmwf_cloud9(dataset, gen_datetime):
                                    Body=data2, ACL='public-read')
     data2.close()
 
+def get_pres4d(var):
+    height, pres = get_ecmwf_137()
+    shp = var.shape
+    pres2d = np.tile(pres[0:136], [shp[0],1])
+    n_elms = shp[2]*shp[3]
+    pres4d = pres2d.repeat(n_elms).reshape(shp)
+    pres4d_var = var*0.0 + pres4d
+    pres4d_var.attrs['standard_name'] = 'pressure'
+    pres4d_var.attrs['units'] = 'hPa'
+    return pres4d_var
+
+def calc_rh(q, p, T):
+    rh = q * 0.263 * p * np.exp((17.67*(T - 273.15))/(T - 29.65))**(-1)
+    rh.attrs['standard_name'] = 'relative_humidity'
+    rh.attrs['comment'] = 'Derived from T, pressure and Spec. Hum.'
+    rh.attrs['units'] = '1'
+    return rh
+
+def calc_vap_pressure(p, q):
+    #p: Pressure in hPa
+    #q: Specific humidity in kg/kg
+    vap_pres = (p*q)/(0.378*q + 0.622)
+    vap_pres.attrs['standard_name'] = 'vapor_pressure'
+    vap_pres.attrs['comment'] = 'Derived from pressure, pressure and Spec. Hum.'
+    vap_pres.attrs['units'] = 'hPa'
+    vap_pres.name = 'vapor_pressure'
+    return vap_pres
 
