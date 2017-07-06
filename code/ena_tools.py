@@ -625,6 +625,46 @@ def ecm_tile_sum(ax, var1, var2, vlims, tstep, levels, colors, fmt='%0.5f'):
     _ = ax.add_feature(coast, edgecolor='black')
     return pc, cs
 
+def ecm_tile_sum_time(ax, var1, var2, vlims, tstep, levels, colors, fmt='%0.5f'):
+    ter_lat = 38.7216
+    ter_lon = -27.2206
+    gra_lat = 39.0525
+    gra_lon = -28.0069
+    pc = var1.sel(time=tstep, method='nearest').sum(dim=('z',)).plot.pcolormesh(ax=ax,
+                                                transform=ccrs.PlateCarree(),
+                                                x='lon', y='lat', vmin=vlims[0],
+                                                    vmax=vlims[1])
+
+    cs = var2.sel(time=tstep, method='nearest').sum(dim=('z',)).plot.contour(ax=ax,
+                                                  transform=ccrs.PlateCarree(),
+                                                  x='lon', y='lat', levels=levels,
+                                                 colors=colors)
+    plt.clabel(cs, inline=1, fontsize=10, fmt=fmt)
+    ax.set_xticks([-23, -24, -26, -28 ], crs=ccrs.PlateCarree())
+    ax.set_yticks([37,39,41], crs=ccrs.PlateCarree())
+    lon_formatter = LongitudeFormatter(zero_direction_label=True)
+    lat_formatter = LatitudeFormatter()
+    ax.xaxis.set_major_formatter(lon_formatter)
+    ax.yaxis.set_major_formatter(lat_formatter)
+
+    ax.plot([ter_lon, gra_lon], [ter_lat, gra_lat],
+           'ro', transform=ccrs.PlateCarree())
+
+    ax.text(ter_lon+.2, ter_lat+.2,
+            'Tericia', transform=ccrs.PlateCarree(), fontsize = 16)
+
+    ax.text(gra_lon+.2, gra_lat+.2,
+            'Graciosa', transform=ccrs.PlateCarree(), fontsize = 16)
+
+
+    coast = cfeature.NaturalEarthFeature(category='physical', scale='10m',
+                                    facecolor='none', name='coastline')
+
+    _ = ax.add_feature(coast, edgecolor='black')
+    return pc, cs
+
+
+
 def nine_panel_ecm_sum(var1, var2, vlims, tsteps, levels, colors, fmt='%0.5f'):
     f, ((ax1, ax2, ax3),
         (ax4, ax5, ax6),
@@ -635,15 +675,45 @@ def nine_panel_ecm_sum(var1, var2, vlims, tsteps, levels, colors, fmt='%0.5f'):
     for i in range(len(axxx)):
         _,_ = ecm_tile_sum(axxx[i], var1, var2, vlims, tsteps[i], levels, colors, fmt='%0.5f')
 
+def nine_panel_ecm_sum_auto(var1, var2, vlims, levels, colors, fmt='%0.5f'):
+    times = var1.time
+    t0 = times.values[0]
+    analysis_hour = datetime.utcfromtimestamp(t0.tolist()/1e9).hour
+    #if at 12Z then we want panel 2 to be next day at 9Z. so 21 h later
+    if analysis_hour == 12:
+        t1 = t0 + np.timedelta64(21,'h')
+    else:
+        t1 = t0 + np.timedelta64(9,'h')
+
+    t2 = t1 + np.timedelta64(24,'h')
+    t3 = t2 + np.timedelta64(24,'h')
+    t4 = t3 + np.timedelta64(24,'h')
+    t5 = t4 + np.timedelta64(24,'h')
+    t6 = t5 + np.timedelta64(24,'h')
+    t7 = t6 + np.timedelta64(24,'h')
+    t8 = t7 + np.timedelta64(24,'h')
+    tsteps = [t0, t1, t2, t3, t4, t5, t6, t7, t8]
+
+    f, ((ax1, ax2, ax3),
+        (ax4, ax5, ax6),
+        (ax7, ax8, ax9)) = plt.subplots(3,3, figsize = [20,15],
+                                        subplot_kw={'projection': ccrs.PlateCarree()})
+
+    axxx = [ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9]
+    for i in range(len(axxx)):
+        _,_ = ecm_tile_sum_time(axxx[i], var1, var2, vlims, tsteps[i], levels, colors, fmt='%0.5f')
+
+
+
 def save_one_ecmwf_cloud9(dataset, gen_datetime):
     start_str = gen_datetime.strftime('%Y%m%d_%H%M')
     s3name = 'ecmwf_sum_clwc_ciwc_9pan'
     plt.figure(figsize=(25,19))
     my_levels = [0.0001, 0.05, 0.1, 1.0]
     my_colors = ['white', 'yellow', 'cyan', 'pink']
-    nine_panel_ecm_sum(dataset.Specific_cloud_liquid_water_content*1000.0,
+    nine_panel_ecm_sum_auto(dataset.Specific_cloud_liquid_water_content*1000.0,
                       dataset.Specific_cloud_ice_water_content*1000.0,
-                      [0.0, 4.0], [0,2,4,6,12,18,24,30,38] , my_levels, my_colors, fmt='%0.5f')
+                      [0.0, 4.0], my_levels, my_colors, fmt='%0.5f')
 
     str1 = start_str + ' ECMWF sum of liquid and ice cloud water in column (g/kg) \n'
     str2 = 'ACE-ENA forecast guidence. ARM Climate Research Facility. scollis@anl.gov'
