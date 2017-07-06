@@ -299,6 +299,9 @@ def save_one_9pan(s3name, figname, fig_datetime):
                                    Body=data2, ACL='public-read')
     data2.close()
 
+def find_element(array, target):
+    return(np.abs(array-target)).argmin()
+
 
 def nine_panel_s3():
     bbox = [-5, -35, 30, 50]
@@ -316,11 +319,35 @@ def nine_panel_s3():
     print(varrs)
     my_ncss = give_me_latest_gfs()
     my_data = get_sfc_gfs(my_ncss, varrs, bbox)
+    times = netCDF4.num2date(my_data.variables['time1'][:], my_data.variables['time1'].units)
+    now_hour = datetime.utcnow().hour
+    first_hour = times[0].hour
+    first_day = times[0].day
+    first_month = times[0].month
+    first_year = times[0].year
+    a_day = timedelta(days=1)
+
+    if first_hour > 9:
+        t1 = datetime(first_year, first_month, first_day + 1, 9,0,0)
+    else:
+        t1 = datetime(first_year, first_month, first_day, 9,0,0)
+
+    t0 = times[0]
+    t2 = t1 + a_day
+    t3 = t2 + a_day
+    t4 = t3 + a_day
+    t5 = t4 + a_day
+    t6 = t5 + a_day
+    t7 = t6 + a_day
+    t8 = t7 + a_day
+    target_times = np.array([t0, t1, t2, t3, t4, t5, t6, t7, t8])
+    target_elms = np.array([find_element(times, te) for te in target_times])
+
     time_steps = [0,2,4,6,8,10,12,14,16]
     local_fig =  tempfile.NamedTemporaryFile(suffix='.png')
     fn = local_fig.name
     for i in range(len(names)):
-        fig_datetime = nine_panel(my_data, bbox, time_steps,
+        fig_datetime = nine_panel(my_data, bbox, target_elms,
                                         bgv=varrs[i],
                                         vmin=mins[i], vmax=maxs[i], oset=osets[i],
                                         scale=scales[i], pref=prefs[i])
