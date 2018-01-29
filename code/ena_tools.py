@@ -434,6 +434,7 @@ def extract_3d_grib(grb_obj, search_term, skip_last=False,
 
     if metadata_list is None:
         metadata_list = ['units', 'cfName']
+    print(search_term)
     grb_list = grb_obj.select(name=search_term)
     level_nums = [this_grb['level'] for this_grb in grb_list]
     order =  np.array(level_nums).argsort()
@@ -477,9 +478,10 @@ def get_time_for_run(file_list, gen_hour):
     good_times_val = []
     for i in range(len(gen_hours)):
         if gen_hours[i] == gen_hour:
-            good_files.append(file_list[i])
-            good_times_gen.append(gen_t[i])
-            good_times_val.append(val_t[i])
+            if file_list[i][0] == 'D':
+                good_files.append(file_list[i])
+                good_times_gen.append(gen_t[i])
+                good_times_val.append(val_t[i])
 
     return good_files, good_times_gen, good_times_val
 
