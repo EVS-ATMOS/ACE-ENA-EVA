@@ -434,6 +434,7 @@ def extract_3d_grib(grb_obj, search_term, skip_last=False,
 
     if metadata_list is None:
         metadata_list = ['units', 'cfName']
+    print(search_term)
     grb_list = grb_obj.select(name=search_term)
     level_nums = [this_grb['level'] for this_grb in grb_list]
     order =  np.array(level_nums).argsort()
